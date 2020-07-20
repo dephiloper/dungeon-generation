@@ -1,0 +1,23 @@
+{
+  "name": "dungeon-generation",
+  "version": "0.0.1",
+  "description": "simple exercise to create dungeon generation algorithm/visualization based on https://www.gamasutra.com/blogs/AAdonaac/20150903/252889/Procedural_Dungeon_Generation_Algorithm.php",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "parcel src/index.html",
+    "start": "parcel serve src/index.html",
+    "build": "cross-env NODE_ENV=production parcel build src/index.html --public-url ."
+  },
+  "author": "dephiloper",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "pixi.js": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^14.0.23",
+    "cross-env": "^7.0.2",
+    "parcel-bundler": "^1.12.4",
+    "rimraf": "^3.0.2",
+    "typescript": "^3.9.7"
+  }
+}
