@@ -1,5 +1,4 @@
-import { Triangle, edgesAreEqual } from "./geometry";
-import { Vector2 } from "./vector2";
+import { Vector2, Triangle, Line } from "./geometry";
 
 export function bowyerWatson(coords: Array<Vector2>): Array<Triangle> {
     // pointList is a set of coordinates defining the points to be triangulated
@@ -17,14 +16,14 @@ export function bowyerWatson(coords: Array<Vector2>): Array<Triangle> {
                 badTriangles.push(t);
             }
         }
-        let polygon: Array<[Vector2, Vector2]> = [];
+        let polygon: Array<Line> = [];
         for (const t of badTriangles) { // find the boundary of the polygonal hole
             for (const e of t.edges) { // loop over every bad triangle
                 let shared = false;
                 for (const ot of badTriangles) { // loop over every other bad triangle
                     if (t == ot) continue;
                     for (const oe of ot.edges) {
-                        if (edgesAreEqual(e, oe)) {
+                        if (e.equals(oe)) {
                             shared = true;
                         }
                     }
@@ -35,14 +34,14 @@ export function bowyerWatson(coords: Array<Vector2>): Array<Triangle> {
         triangulation = triangulation.filter((t) => !badTriangles.includes(t)); // get all triangles that are not inside bad triangles
         
         for (const e of polygon) { // re-triangulate the polygonal hole
-            triangulation.push(new Triangle(e[0], e[1], c));
+            triangulation.push(new Triangle(e.a, e.b, c));
         }
     }
     triangulation = triangulation.filter((t) => !t.sharesPointWith(superTriangle)); // done inserting points, now clean up
     return triangulation;
 }
 
-function generateSuperTriangle(coords: Array<Vector2>): Triangle {
+export function generateSuperTriangle(coords: Array<Vector2>): Triangle {
     let min = new Vector2(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
     let max = new Vector2(0, 0);
 

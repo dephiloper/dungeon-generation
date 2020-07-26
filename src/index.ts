@@ -1,19 +1,20 @@
 import * as PIXI from "pixi.js";
 import { bowyerWatson } from "./delaunay";
-import { Triangle, edgesFromTriangulation } from "./geometry";
-import { Vector2 } from "./vector2";
+import { Vector2, Triangle, Line, edgesFromTriangulation } from "./geometry";
+import { prim } from "./mst";
 
-const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0, clearBeforeRender: true });
+const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0 });
 document.body.appendChild(app.view);
 
 const TILE_SIZE: number = 4;
-const ROOM_MIN_DIM: number = 6;
-const ROOM_MAX_DIM: number = 32;
-const ROOM_SPAWN_RADIUS: number = 32;
-const ROOM_COUNT: number = 64;
-const MAIN_ROOM_COUNT: number = 12;
+const ROOM_MIN_DIM: number = 8;
+const ROOM_MAX_DIM: number = 48;
+const ROOM_SPAWN_RADIUS: number = 48;
+const ROOM_COUNT: number = 128;
+const MAIN_ROOM_COUNT: number = 24;
 const STAGE_PAUSE: number = 500;
 const STAGE_STEP_PAUSE: number = 20;
+const READD_EDGE_COUNT: number = 2;
 
 enum State {
     RoomGeneration,
@@ -51,9 +52,14 @@ class Room {
     draw() {
         this.graphics.clear();
         this.graphics.lineStyle(1, this.isCollided ? 0xff0000 : 0xffffff);
-        this.graphics.beginFill(this.isMainRoom ? 0x006400 : 0x0f0f0f);
+        this.graphics.beginFill(this.isMainRoom ? 0x006400 : 0x0f0f0f, 0.8);
         this.graphics.drawRect(this.position.x, this.position.y, this.width, this.height);
         this.graphics.endFill();
+
+        if (this.isMainRoom) {
+            this.graphics.lineStyle(1, 0x00ff00, 1);
+            this.graphics.drawCircle(this.position.x + this.width / 2, this.position.y + this.height / 2, 3);
+        }
     }
 
     checkForCollision(o: Room) {
@@ -74,7 +80,8 @@ class Room {
 
 let rooms: Array<Room> = [];
 let coords: Array<Vector2> = [];
-let edges: Array<[Vector2, Vector2]> = [];
+let edges: Array<Line> = [];
+let removeEdges: Array<Line> = []; 
 let tempIndex: number = 0;
 let generationState: State = State.RoomGeneration;
 let stateChanged: boolean = true;
@@ -159,8 +166,9 @@ function roomSeparation(delta: number): void {
                 if (rooms[i].checkForCollision(rooms[j])) {
                     rooms[i].isCollided = true;
                     const dir = rooms[j].position.dir_to(rooms[i].position);
-                    rooms[i].position = rooms[i].position.add(dir.mul(delta * 2));
-                    rooms[i].position = rooms[i].position.add(new Vector2(Math.random() - 0.5, Math.random() - 0.5).mul(1.5));
+                    let newPosition = rooms[i].position.add(dir.mul(delta * 2));
+                    newPosition = newPosition.add(new Vector2(Math.random() - 0.5, Math.random() - 0.5).mul(1.5));
+                    rooms[i].position = newPosition;
                 }
             }
         }
@@ -199,27 +207,62 @@ function triangulation(_delta: number): void {
             const mainCoords: Array<Vector2> = rooms.filter(r => r.isMainRoom).map(r => r.position);
             let triangulation: Array<Triangle> = bowyerWatson(mainCoords);
             edges = edgesFromTriangulation(triangulation);
-            
             elapsedTime = 0.0;
             tempIndex = 0;
         }
     } else {
         if (elapsedTime >= STAGE_STEP_PAUSE) {
-            const line = new PIXI.Graphics();
-            line.lineStyle(3, 0xffffff, 1);
-            line.moveTo(edges[tempIndex][0].x, edges[tempIndex][0].y);
-            line.lineTo(edges[tempIndex][1].x, edges[tempIndex][1].y);
-            app.stage.addChild(line);
-            line.lineStyle(1, 0x000000, 1);
-            line.moveTo(edges[tempIndex][0].x, edges[tempIndex][0].y);
-            line.lineTo(edges[tempIndex][1].x, edges[tempIndex][1].y);
-            app.stage.addChild(line);
+            app.stage.addChild(edges[tempIndex].graphics);
+            edges[tempIndex].draw();
             elapsedTime = 0.0;
             tempIndex++;
         }
 
         if (tempIndex == edges.length) {
             generationState = State.SpanningTree;
+            stateChanged = true;
+            elapsedTime = 0.0;
+            tempIndex = 0;
+        }
+    }
+}
+
+function spanningTree(_delta: number): void {
+    if (stateChanged) {
+        if (elapsedTime >= STAGE_PAUSE) {
+            stateChanged = false;
+            const mainCoords: Array<Vector2> = rooms.filter(r => r.isMainRoom).map(r => r.position);
+            let mstEdges = prim(mainCoords);
+            
+            for (const e of edges) {
+                let included: boolean = false;
+                for (const m of mstEdges) {
+                    if (e.equals(m)) {
+                        included = true;
+                        break;
+                    }
+                }
+
+                if (!included) {
+                    removeEdges.push(e);
+                }
+            }
+
+            // readd edges to allow alternative paths
+            for (let i = 0; i < READD_EDGE_COUNT; i++) {
+                removeEdges.splice(Math.floor(Math.random() * removeEdges.length), 1);
+            }
+
+            tempIndex = 0;
+            elapsedTime = 0.0;
+        }
+    } else {
+        if (elapsedTime >= STAGE_STEP_PAUSE) {
+            app.stage.removeChild(removeEdges[tempIndex++].graphics);
+        }
+
+        if (tempIndex == removeEdges.length) {
+            generationState = State.HallwayGeneration;
             stateChanged = true;
             elapsedTime = 0.0;
             tempIndex = 0;
@@ -242,6 +285,7 @@ function gameLoop(delta: number): void {
             triangulation(delta);
             break;
         case State.SpanningTree:
+            spanningTree(delta);
             break;
         case State.HallwayGeneration:
             break;
