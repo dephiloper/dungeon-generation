@@ -1,5 +1,7 @@
 import * as PIXI from "pixi.js";
-import { Vector2 } from "./vec";
+import { bowyerWatson } from "./delaunay";
+import { Triangle, edgesFromTriangulation } from "./geometry";
+import { Vector2 } from "./vector2";
 
 const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: false, backgroundColor: 0xb0b0b0, clearBeforeRender: true });
 document.body.appendChild(app.view);
@@ -9,7 +11,7 @@ const ROOM_MIN_DIM: number = 8;
 const ROOM_MAX_DIM: number = 48;
 const ROOM_SPAWN_RADIUS: number = 48;
 const ROOM_COUNT: number = 128;
-const MAIN_ROOM_COUNT: number = 8;
+const MAIN_ROOM_COUNT: number = 4;
 
 enum State {
     RoomGeneration,
@@ -29,6 +31,7 @@ class Room {
     isCollided: boolean;
     graphics: PIXI.Graphics;
     isMainRoom: boolean;
+
     constructor(position: Vector2, width: number, height: number) {
         this.id = Room.ID_COUNT++;
         this.position = position;
@@ -68,7 +71,8 @@ class Room {
 }
 
 let rooms: Array<Room> = [];
-let points: Array<Vector2> = [];
+let coords: Array<Vector2> = [];
+let edges: Array<[Vector2, Vector2]> = [];
 let tempIndex: number = 0;
 let generationState: State = State.RoomGeneration;
 let stateChanged: boolean = true;
@@ -119,8 +123,9 @@ function roomGeneration(_delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= 1000) {
             stateChanged = false;
-            points = generatePositionsWithinCircle(new Vector2(app.view.width / 2, app.view.height / 2), ROOM_SPAWN_RADIUS, ROOM_COUNT);
-            rooms = generateRooms(points);
+            coords = generatePositionsWithinCircle(new Vector2(app.view.width / 2, app.view.height / 2), ROOM_SPAWN_RADIUS, ROOM_COUNT);
+            rooms = generateRooms(coords);
+            elapsedTime = 0.0;
         }
     } else {
         if (elapsedTime >= 20) {
@@ -141,6 +146,7 @@ function roomSeparation(delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= 500) {
             stateChanged = false;
+            elapsedTime = 0.0;
         }
     } else {
         for (let i = 0; i < rooms.length; i++) {
@@ -170,12 +176,53 @@ function mainRoomPicking(_delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= 500) {
             stateChanged = false;
+            elapsedTime = 0.0;
         }
     } else {
         const sorted = rooms.sort((a, b) => b.width * b.height - a.width * a.height);
         sorted[tempIndex++].isMainRoom = true;
         if (tempIndex == MAIN_ROOM_COUNT) {
             generationState = State.Triangulation;
+            stateChanged = true;
+            elapsedTime = 0.0;
+            tempIndex = 0;
+        }
+    }
+}
+
+function triangulation(_delta: number): void {
+    if (stateChanged) {
+        if (elapsedTime >= 500) {
+            stateChanged = false;
+            const mainCoords: Array<Vector2> = rooms.filter(r => r.isMainRoom).map(r => r.position);
+            let triangulation: Array<Triangle> = bowyerWatson(mainCoords);
+            // triangulation.forEach(t => {
+            //     app.stage.addChild(t.graphics);
+            //     t.draw();
+            // });
+
+            //edges = edgesFromTriangulation(triangulation);
+            for (const t of triangulation) {
+                edges.push(...t.edges);
+            }
+            console.log(edges.length);
+            elapsedTime = 0.0;
+            tempIndex = 0;
+        }
+    } else {
+        if (elapsedTime >= 20) {
+            const line = new PIXI.Graphics();
+            line.lineStyle(2, 0x000000, 1);
+            line.moveTo(edges[tempIndex][0].x, edges[tempIndex][0].y);
+            line.lineTo(edges[tempIndex][1].x, edges[tempIndex][1].y);
+            app.stage.addChild(line);
+            elapsedTime = 0.0;
+            tempIndex++;
+        }
+
+        if (tempIndex == edges.length -1) {
+            generationState = State.SpanningTree;
+            stateChanged = true;
             elapsedTime = 0.0;
             tempIndex = 0;
         }
@@ -194,6 +241,7 @@ function gameLoop(delta: number): void {
             mainRoomPicking(delta);
             break;
         case State.Triangulation:
+            triangulation(delta);
             break;
         case State.SpanningTree:
             break;
