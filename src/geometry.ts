@@ -82,7 +82,7 @@ export function edgesAreEqual(a: [Vector2, Vector2], b: [Vector2, Vector2]) {
     return (a[0] == b[0] && a[1] == b[1]) || (a[0] == b[1] && a[1] == b[0]);
 }
 
-export function edgesFromTriangulation(triangulation: Array<Triangle>): Array<[Vector2, Vector2] {
+export function edgesFromTriangulation(triangulation: Array<Triangle>): Array<[Vector2, Vector2]> {
     const edges: Array<[Vector2, Vector2]> = [];
 
     for (const t of triangulation) {

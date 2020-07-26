@@ -3,15 +3,17 @@ import { bowyerWatson } from "./delaunay";
 import { Triangle, edgesFromTriangulation } from "./geometry";
 import { Vector2 } from "./vector2";
 
-const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: false, backgroundColor: 0xb0b0b0, clearBeforeRender: true });
+const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0, clearBeforeRender: true });
 document.body.appendChild(app.view);
 
 const TILE_SIZE: number = 4;
-const ROOM_MIN_DIM: number = 8;
-const ROOM_MAX_DIM: number = 48;
-const ROOM_SPAWN_RADIUS: number = 48;
-const ROOM_COUNT: number = 128;
-const MAIN_ROOM_COUNT: number = 4;
+const ROOM_MIN_DIM: number = 6;
+const ROOM_MAX_DIM: number = 32;
+const ROOM_SPAWN_RADIUS: number = 32;
+const ROOM_COUNT: number = 64;
+const MAIN_ROOM_COUNT: number = 12;
+const STAGE_PAUSE: number = 500;
+const STAGE_STEP_PAUSE: number = 20;
 
 enum State {
     RoomGeneration,
@@ -121,14 +123,14 @@ async function setup() {
 
 function roomGeneration(_delta: number): void {
     if (stateChanged) {
-        if (elapsedTime >= 1000) {
+        if (elapsedTime >= STAGE_PAUSE * 2) {
             stateChanged = false;
             coords = generatePositionsWithinCircle(new Vector2(app.view.width / 2, app.view.height / 2), ROOM_SPAWN_RADIUS, ROOM_COUNT);
             rooms = generateRooms(coords);
             elapsedTime = 0.0;
         }
     } else {
-        if (elapsedTime >= 20) {
+        if (elapsedTime >= STAGE_STEP_PAUSE) {
             rooms[tempIndex++].graphics.visible = true;
             elapsedTime = 0.0;
         }
@@ -144,7 +146,7 @@ function roomGeneration(_delta: number): void {
 
 function roomSeparation(delta: number): void {
     if (stateChanged) {
-        if (elapsedTime >= 500) {
+        if (elapsedTime >= STAGE_PAUSE) {
             stateChanged = false;
             elapsedTime = 0.0;
         }
@@ -174,7 +176,7 @@ function roomSeparation(delta: number): void {
 
 function mainRoomPicking(_delta: number): void {
     if (stateChanged) {
-        if (elapsedTime >= 500) {
+        if (elapsedTime >= STAGE_PAUSE) {
             stateChanged = false;
             elapsedTime = 0.0;
         }
@@ -192,27 +194,23 @@ function mainRoomPicking(_delta: number): void {
 
 function triangulation(_delta: number): void {
     if (stateChanged) {
-        if (elapsedTime >= 500) {
+        if (elapsedTime >= STAGE_PAUSE) {
             stateChanged = false;
             const mainCoords: Array<Vector2> = rooms.filter(r => r.isMainRoom).map(r => r.position);
             let triangulation: Array<Triangle> = bowyerWatson(mainCoords);
-            // triangulation.forEach(t => {
-            //     app.stage.addChild(t.graphics);
-            //     t.draw();
-            // });
-
-            //edges = edgesFromTriangulation(triangulation);
-            for (const t of triangulation) {
-                edges.push(...t.edges);
-            }
-            console.log(edges.length);
+            edges = edgesFromTriangulation(triangulation);
+            
             elapsedTime = 0.0;
             tempIndex = 0;
         }
     } else {
-        if (elapsedTime >= 20) {
+        if (elapsedTime >= STAGE_STEP_PAUSE) {
             const line = new PIXI.Graphics();
-            line.lineStyle(2, 0x000000, 1);
+            line.lineStyle(3, 0xffffff, 1);
+            line.moveTo(edges[tempIndex][0].x, edges[tempIndex][0].y);
+            line.lineTo(edges[tempIndex][1].x, edges[tempIndex][1].y);
+            app.stage.addChild(line);
+            line.lineStyle(1, 0x000000, 1);
             line.moveTo(edges[tempIndex][0].x, edges[tempIndex][0].y);
             line.lineTo(edges[tempIndex][1].x, edges[tempIndex][1].y);
             app.stage.addChild(line);
@@ -220,7 +218,7 @@ function triangulation(_delta: number): void {
             tempIndex++;
         }
 
-        if (tempIndex == edges.length -1) {
+        if (tempIndex == edges.length) {
             generationState = State.SpanningTree;
             stateChanged = true;
             elapsedTime = 0.0;

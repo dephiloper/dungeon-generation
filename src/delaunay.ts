@@ -56,8 +56,8 @@ function generateSuperTriangle(coords: Array<Vector2>): Triangle {
         if (p.y < min.y)
             min.y = p.y;
     }
-    max = max.add(new Vector2(5,5));
-    min = min.sub(new Vector2(5,5));
+    max = max.add(new Vector2(100,100));
+    min = min.sub(new Vector2(100,100));
     let lenX: number = max.x - min.x;
     let lenY: number = max.y - min.y;
 
