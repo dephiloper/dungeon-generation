@@ -6,7 +6,7 @@ import { prim } from "./mst";
 const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0 });
 document.body.appendChild(app.view);
 
-const TILE_SIZE: number = 4;
+const TILE_SIZE: number = 0.2;
 const ROOM_MIN_DIM: number = 8;
 const ROOM_MAX_DIM: number = 48;
 const ROOM_SPAWN_RADIUS: number = 48;
@@ -88,7 +88,7 @@ let stateChanged: boolean = true;
 let elapsedTime: number = 0.0;
 
 function roundm(n: number, m: number): number {
-    return Math.floor((n + m - 1) / 2) * 2;
+    return Math.round(n/m) * m;
 }
 
 // https://stackoverflow.com/questions/5837572/generate-a-random-point-within-a-circle-uniformly/50746409#50746409
@@ -165,10 +165,12 @@ function roomSeparation(delta: number): void {
 
                 if (rooms[i].checkForCollision(rooms[j])) {
                     rooms[i].isCollided = true;
-                    const dir = rooms[j].position.dir_to(rooms[i].position);
+                    const dir = rooms[j].position.dirTo(rooms[i].position);
                     let newPosition = rooms[i].position.add(dir.mul(delta * 2));
                     newPosition = newPosition.add(new Vector2(Math.random() - 0.5, Math.random() - 0.5).mul(1.5));
                     rooms[i].position = newPosition;
+                    rooms[i].position.x = roundm(rooms[i].position.x, TILE_SIZE);
+                    rooms[i].position.y = roundm(rooms[i].position.y, TILE_SIZE);
                 }
             }
         }

@@ -66,7 +66,7 @@ export class Vector2 {
         return Math.pow(this.x, 2) + Math.pow(this.y, 2);
     }
 
-    dir_to(o: Vector2) {
+    dirTo(o: Vector2) {
         return o.sub(this).normalized();
     }
 }

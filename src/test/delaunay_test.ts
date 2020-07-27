@@ -1,5 +1,5 @@
 import * as PIXI from "pixi.js";
-import { edgesFromTriangulation, Line, Point, Triangle } from "../geometry";
+import { edgesFromTriangulation, Line, Point, Triangle, Vector2 } from "../geometry";
 import { bowyerWatson } from "../delaunay";
 
 const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0, clearBeforeRender: true });
@@ -36,4 +36,3 @@ function gameLoop(_delta: number): void {
 }
 
 app.ticker.add(delta => gameLoop(delta));
-
