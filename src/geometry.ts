@@ -95,10 +95,12 @@ export class Point {
 export class Line {
     vertices: [Vector2, Vector2]
     graphics: PIXI.Graphics
+    color: number
 
     constructor(a: Vector2, b: Vector2) {
         this.vertices = [a, b];
         this.graphics = new PIXI.Graphics();
+        this.color = 0x00ff00;
     }
 
     get a(): Vector2 { return this.vertices[0]; }
@@ -110,7 +112,7 @@ export class Line {
 
     draw(): void {
         this.clear();
-        this.graphics.lineStyle(2, 0x00ff00, 1);
+        this.graphics.lineStyle(2, this.color, 1);
         this.graphics.moveTo(this.a.x, this.a.y);
         this.graphics.lineTo(this.b.x, this.b.y);
     }

@@ -82,6 +82,7 @@ let rooms: Array<Room> = [];
 let coords: Array<Vector2> = [];
 let edges: Array<Line> = [];
 let removeEdges: Array<Line> = []; 
+let mainRooms: Array<Room> = [];
 let tempIndex: number = 0;
 let generationState: State = State.RoomGeneration;
 let stateChanged: boolean = true;
@@ -233,8 +234,8 @@ function spanningTree(_delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= STAGE_PAUSE) {
             stateChanged = false;
-            const mainCoords: Array<Vector2> = rooms.filter(r => r.isMainRoom).map(r => r.position);
-            let mstEdges = prim(mainCoords);
+            mainRooms = rooms.filter(r => r.isMainRoom);
+            let mstEdges = prim(mainRooms.map(r => r.position));
             
             for (const e of edges) {
                 let included: boolean = false;
@@ -253,6 +254,42 @@ function spanningTree(_delta: number): void {
             // readd edges to allow alternative paths
             for (let i = 0; i < READD_EDGE_COUNT; i++) {
                 removeEdges.splice(Math.floor(Math.random() * removeEdges.length), 1);
+            }
+            edges = edges.filter(e => !removeEdges.includes(e));
+
+            tempIndex = 0;
+            elapsedTime = 0.0;
+        }
+    } else {
+        if (elapsedTime >= STAGE_STEP_PAUSE) {
+            app.stage.removeChild(removeEdges[tempIndex++].graphics);
+        }
+
+        if (tempIndex == removeEdges.length) {
+            generationState = State.HallwayGeneration;
+            stateChanged = true;
+            elapsedTime = 0.0;
+            tempIndex = 0;
+        }
+    }
+}
+
+function hallwayGeneration(_delta: number): void {
+    if (stateChanged) {
+        if (elapsedTime >= STAGE_PAUSE) {
+            stateChanged = false;
+
+            //edges.forEach(e => e.clear());
+
+            for (const e of edges) {
+                let l1 = new Line(e.a, new Vector2(e.b.x, e.a.y));
+                l1.color = 0xff0000;
+                let l2 = new Line(new Vector2(e.b.x, e.a.y), e.b);
+                l2.color = 0xff0000;
+                app.stage.addChild(l1.graphics);
+                app.stage.addChild(l2.graphics);
+                l1.draw();
+                l2.draw();
             }
 
             tempIndex = 0;
@@ -290,6 +327,7 @@ function gameLoop(delta: number): void {
             spanningTree(delta);
             break;
         case State.HallwayGeneration:
+            hallwayGeneration(delta);
             break;
     }
 
