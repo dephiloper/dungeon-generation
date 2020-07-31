@@ -1,6 +1,6 @@
 import * as PIXI from "pixi.js";
-import { Point, Line } from "./geometry";
-import { prim } from "./mst";
+import { Point, Line } from "../geometry";
+import { prim } from "../mst";
 
 const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0, clearBeforeRender: true });
 document.body.appendChild(app.view);

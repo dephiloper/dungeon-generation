@@ -1,6 +1,6 @@
 import * as PIXI from "pixi.js";
 import { bowyerWatson } from "./delaunay";
-import { Vector2, Triangle, Line, edgesFromTriangulation } from "./geometry";
+import { Vector2, Room, Triangle, Line, edgesFromTriangulation } from "./geometry";
 import { prim } from "./mst";
 
 const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0 });
@@ -11,7 +11,8 @@ const ROOM_MIN_DIM: number = 8;
 const ROOM_MAX_DIM: number = 48;
 const ROOM_SPAWN_RADIUS: number = 48;
 const ROOM_COUNT: number = 128;
-const MAIN_ROOM_COUNT: number = 24;
+const MAIN_ROOM_COUNT: number = 12;
+const MAIN_ROOM_DIST: number = 64;
 const STAGE_PAUSE: number = 500;
 const STAGE_STEP_PAUSE: number = 20;
 const READD_EDGE_COUNT: number = 2;
@@ -22,66 +23,15 @@ enum State {
     MainRoomPicking,
     Triangulation,
     SpanningTree,
+    HallwayRouting,
     HallwayGeneration
-}
-
-class Room {
-    private static ID_COUNT: number = 0;
-    id: number;
-    position: Vector2;
-    width: number;
-    height: number;
-    isCollided: boolean;
-    graphics: PIXI.Graphics;
-    isMainRoom: boolean;
-
-    constructor(position: Vector2, width: number, height: number) {
-        this.id = Room.ID_COUNT++;
-        this.position = position;
-        this.width = width;
-        this.height = height;
-        this.isCollided = false;
-        this.isMainRoom = false;
-        this.graphics = new PIXI.Graphics();
-        this.graphics.pivot.x = width / 2;
-        this.graphics.pivot.y = height / 2;
-        this.graphics.visible = false;
-        app.stage.addChild(this.graphics);
-    }
-
-    draw() {
-        this.graphics.clear();
-        this.graphics.lineStyle(1, this.isCollided ? 0xff0000 : 0xffffff);
-        this.graphics.beginFill(this.isMainRoom ? 0x006400 : 0x0f0f0f, 0.8);
-        this.graphics.drawRect(this.position.x, this.position.y, this.width, this.height);
-        this.graphics.endFill();
-
-        if (this.isMainRoom) {
-            this.graphics.lineStyle(1, 0x00ff00, 1);
-            this.graphics.drawCircle(this.position.x + this.width / 2, this.position.y + this.height / 2, 3);
-        }
-    }
-
-    checkForCollision(o: Room) {
-        const l1 = this.position.add(new Vector2(-this.width / 2, this.height / 2));
-        const r1 = this.position.add(new Vector2(this.width / 2, -this.height / 2));
-        const l2 = o.position.add(new Vector2(-o.width / 2, o.height / 2));
-        const r2 = o.position.add(new Vector2(o.width / 2, -o.height / 2));
-
-        if (l1.x >= r2.x || l2.x >= r1.x)
-            return false;
-
-        if (l1.y <= r2.y || l2.y <= r1.y)
-            return false;
-
-        return true;
-    }
 }
 
 let rooms: Array<Room> = [];
 let coords: Array<Vector2> = [];
 let edges: Array<Line> = [];
-let removeEdges: Array<Line> = []; 
+let connections: Array<Line> = [];
+let removeEdges: Array<Line> = [];
 let mainRooms: Array<Room> = [];
 let tempIndex: number = 0;
 let generationState: State = State.RoomGeneration;
@@ -89,7 +39,7 @@ let stateChanged: boolean = true;
 let elapsedTime: number = 0.0;
 
 function roundm(n: number, m: number): number {
-    return Math.round(n/m) * m;
+    return Math.round(n / m) * m;
 }
 
 // https://stackoverflow.com/questions/5837572/generate-a-random-point-within-a-circle-uniformly/50746409#50746409
@@ -120,6 +70,8 @@ function generateRooms(points: Vector2[]): Array<Room> {
     for (const p of points) {
         const room = new Room(p, randValueWithBounds(ROOM_MIN_DIM, ROOM_MAX_DIM), randValueWithBounds(ROOM_MIN_DIM, ROOM_MAX_DIM));
         rooms.push(room);
+        room.graphics.visible = false;
+        app.stage.addChild(room.graphics);
     }
 
     return rooms;
@@ -188,12 +140,21 @@ function roomSeparation(delta: number): void {
 function mainRoomPicking(_delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= STAGE_PAUSE) {
+            const sorted = rooms.sort((a, b) => b.width * b.height - a.width * a.height);
+            mainRooms.push(sorted[0]);
+            for (const s of sorted) {
+                if (!mainRooms.some(m => m.position.distTo(s.position) < MAIN_ROOM_DIST)) {
+                    mainRooms.push(s);
+                    if (mainRooms.length == MAIN_ROOM_COUNT) break;
+                }
+            }
             stateChanged = false;
             elapsedTime = 0.0;
         }
     } else {
-        const sorted = rooms.sort((a, b) => b.width * b.height - a.width * a.height);
-        sorted[tempIndex++].isMainRoom = true;
+        if (elapsedTime >= STAGE_STEP_PAUSE) {
+            mainRooms[tempIndex++].isMainRoom = true;
+        }
         if (tempIndex == MAIN_ROOM_COUNT) {
             generationState = State.Triangulation;
             stateChanged = true;
@@ -207,7 +168,8 @@ function triangulation(_delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= STAGE_PAUSE) {
             stateChanged = false;
-            const mainCoords: Array<Vector2> = rooms.filter(r => r.isMainRoom).map(r => r.position);
+            rooms.filter(r => !mainRooms.includes(r)).forEach(r => r.graphics.alpha = 0.2);
+            const mainCoords: Array<Vector2> = mainRooms.map(r => r.position);
             let triangulation: Array<Triangle> = bowyerWatson(mainCoords);
             edges = edgesFromTriangulation(triangulation);
             elapsedTime = 0.0;
@@ -236,7 +198,7 @@ function spanningTree(_delta: number): void {
             stateChanged = false;
             mainRooms = rooms.filter(r => r.isMainRoom);
             let mstEdges = prim(mainRooms.map(r => r.position));
-            
+
             for (const e of edges) {
                 let included: boolean = false;
                 for (const m of mstEdges) {
@@ -266,8 +228,56 @@ function spanningTree(_delta: number): void {
         }
 
         if (tempIndex == removeEdges.length) {
-            generationState = State.HallwayGeneration;
+            generationState = State.HallwayRouting;
             stateChanged = true;
+            elapsedTime = 0.0;
+            tempIndex = 0;
+        }
+    }
+}
+
+function hallwayRouting(_delta: number): void {
+    if (stateChanged) {
+        if (elapsedTime >= STAGE_PAUSE) {
+            stateChanged = false;
+            for (const e of edges) {
+                // choose route depending on the route
+                const l1 = new Line(e.a, new Vector2(e.b.x, e.a.y));
+                l1.color = 0xff0000;
+                const l2 = new Line(new Vector2(e.b.x, e.a.y), e.b);
+                l2.color = 0xff0000;
+                connections.push(l1);
+                connections.push(l2);
+
+            }
+            tempIndex = 0;
+            elapsedTime = 0.0;
+        }
+    } else {
+        if (elapsedTime >= STAGE_STEP_PAUSE) {
+            const l = connections[tempIndex];
+            app.stage.addChild(l.graphics);
+            l.draw();
+
+            for (const r of rooms.filter(r => !r.isMainRoom)) {
+                const intersects = r.intersectWithLine(l);
+                if (intersects.length > 0) {
+                    r.isIntermediate = true;
+                    r.graphics.alpha = 1.0;
+                }
+            }
+
+            if (tempIndex < edges.length) {
+                const e = edges[tempIndex];
+                e.clear();
+                app.stage.removeChild(e.graphics);
+            }
+            tempIndex++;
+        }
+
+
+        if (tempIndex == connections.length) {
+            generationState = State.HallwayGeneration;
             elapsedTime = 0.0;
             tempIndex = 0;
         }
@@ -278,34 +288,19 @@ function hallwayGeneration(_delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= STAGE_PAUSE) {
             stateChanged = false;
-
-            //edges.forEach(e => e.clear());
-
-            for (const e of edges) {
-                let l1 = new Line(e.a, new Vector2(e.b.x, e.a.y));
-                l1.color = 0xff0000;
-                let l2 = new Line(new Vector2(e.b.x, e.a.y), e.b);
-                l2.color = 0xff0000;
-                app.stage.addChild(l1.graphics);
-                app.stage.addChild(l2.graphics);
-                l1.draw();
-                l2.draw();
-            }
-
             tempIndex = 0;
             elapsedTime = 0.0;
         }
     } else {
         if (elapsedTime >= STAGE_STEP_PAUSE) {
-            app.stage.removeChild(removeEdges[tempIndex++].graphics);
         }
 
-        if (tempIndex == removeEdges.length) {
-            generationState = State.HallwayGeneration;
-            stateChanged = true;
-            elapsedTime = 0.0;
-            tempIndex = 0;
-        }
+    }
+
+    if (tempIndex == edges.length) {
+        //generationState = State.IntermediateRooms;
+        elapsedTime = 0.0;
+        tempIndex = 0;
     }
 }
 
@@ -325,6 +320,9 @@ function gameLoop(delta: number): void {
             break;
         case State.SpanningTree:
             spanningTree(delta);
+            break;
+        case State.HallwayRouting:
+            hallwayRouting(delta);
             break;
         case State.HallwayGeneration:
             hallwayGeneration(delta);

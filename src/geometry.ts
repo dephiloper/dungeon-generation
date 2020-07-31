@@ -1,6 +1,80 @@
 import * as PIXI from "pixi.js";
 
+export class Room {
+    private static ID_COUNT: number = 0;
+    id: number = Room.ID_COUNT++;
+    position: Vector2;
+    width: number;
+    height: number;
+    graphics: PIXI.Graphics = new PIXI.Graphics();
+    isCollided: boolean = false;
+    isMainRoom: boolean = false;
+    isIntermediate: boolean = false;
+
+
+    constructor(position: Vector2, width: number, height: number) {
+        this.position = position;
+        this.width = width;
+        this.height = height;
+        this.graphics.pivot.x = width / 2;
+        this.graphics.pivot.y = height / 2;
+    }
+
+    draw() {
+        this.graphics.clear();
+        this.graphics.lineStyle(1, this.isCollided ? 0xff0000 : 0xffffff);
+        this.graphics.beginFill(this.isMainRoom ? 0x006400 : this.isIntermediate ? 0x000064 : 0x0f0f0f, 0.8);
+        this.graphics.drawRect(this.position.x, this.position.y, this.width, this.height);
+        this.graphics.endFill();
+
+        if (this.isMainRoom) {
+            this.graphics.lineStyle(1, 0x00ff00, 1);
+            this.graphics.drawCircle(this.position.x + this.width / 2, this.position.y + this.height / 2, 3);
+        }
+    }
+
+    // http://www.jeffreythompson.org/collision-detection/line-rect.php
+    intersectWithLine(o: Line): Array<Vector2> {
+        const rx: number = this.position.x - this.width / 2;
+        const ry: number = this.position.y - this.height / 2;
+        const rw: number = this.width;
+        const rh: number = this.height;
+        const l: Vector2 = o.intersectsWith(new Line(new Vector2(rx,ry), new Vector2(rx, ry+rh)));
+        const r: Vector2 = o.intersectsWith(new Line(new Vector2(rx+rw,ry), new Vector2(rx+rw,ry+rh)));
+        const t: Vector2 = o.intersectsWith(new Line(new Vector2(rx,ry), new Vector2(rx+rw,ry)));
+        const b: Vector2 = o.intersectsWith(new Line(new Vector2(rx,ry+rh), new Vector2(rx+rw,ry+rh)));
+
+        const intersections: Array<Vector2> = [];
+
+        if (!l.isNaN()) intersections.push(l);
+        if (!r.isNaN()) intersections.push(r);
+        if (!t.isNaN()) intersections.push(t);
+        if (!b.isNaN()) intersections.push(b);
+
+        return intersections;
+    }
+
+    checkForCollision(o: Room): boolean {
+        const l1 = this.position.add(new Vector2(-this.width / 2, this.height / 2));
+        const r1 = this.position.add(new Vector2(this.width / 2, -this.height / 2));
+        const l2 = o.position.add(new Vector2(-o.width / 2, o.height / 2));
+        const r2 = o.position.add(new Vector2(o.width / 2, -o.height / 2));
+
+        if (l1.x >= r2.x || l2.x >= r1.x)
+            return false;
+
+        if (l1.y <= r2.y || l2.y <= r1.y)
+            return false;
+
+        return true;
+    }
+}
+
 export class Vector2 {
+    static NaN = new Vector2(NaN, NaN);
+    static ZERO = new Vector2(0, 0);
+    static ONE = new Vector2(1, 1);
+
     x: number;
     y: number;
     constructor(x: number, y: number) {
@@ -10,6 +84,10 @@ export class Vector2 {
 
     equals(o: Vector2): boolean {
         return this.x == o.x && this.y == o.y;
+    }
+
+    isNaN() : boolean {
+        return Number.isNaN(this.x) && Number.isNaN(this.y);
     }
 
     toString(): string {
@@ -69,21 +147,26 @@ export class Vector2 {
     dirTo(o: Vector2) {
         return o.sub(this).normalized();
     }
+    
+    cross(o: Vector2) {
+        return this.x * o.y - this.y * o.x;
+    }
 }
 
 export class Point {
-    position: Vector2
-    graphics: PIXI.Graphics
+    position: Vector2;
+    graphics: PIXI.Graphics = new PIXI.Graphics();
+    color: number = 0x0f0f0f;
+    radius: number = 2;
 
     constructor(x: number, y: number) {
         this.position = new Vector2(x, y);
-        this.graphics = new PIXI.Graphics();
     }
 
     draw(): void {
         this.clear();
-        this.graphics.beginFill(0x0f0f0f);
-        this.graphics.drawCircle(this.position.x, this.position.y, 2);
+        this.graphics.beginFill(this.color);
+        this.graphics.drawCircle(this.position.x, this.position.y, this.radius);
         this.graphics.endFill();
     }
 
@@ -93,18 +176,39 @@ export class Point {
 }
 
 export class Line {
-    vertices: [Vector2, Vector2]
-    graphics: PIXI.Graphics
-    color: number
+    vertices: [Vector2, Vector2];
+    graphics: PIXI.Graphics = new PIXI.Graphics();
+    color: number = 0x00ff00;
 
     constructor(a: Vector2, b: Vector2) {
         this.vertices = [a, b];
-        this.graphics = new PIXI.Graphics();
-        this.color = 0x00ff00;
     }
 
     get a(): Vector2 { return this.vertices[0]; }
     get b(): Vector2 { return this.vertices[1]; }
+    set a(v: Vector2) { this.vertices[0] = v };
+    set b(v: Vector2) { this.vertices[1] = v };
+
+    // https://stackoverflow.com/a/565282/10547035
+    intersectsWith(o: Line): Vector2 {
+        const p = this.a;
+        const r = this.b.sub(this.a);
+        const q = o.a;
+        const s = o.b.sub(o.a);
+        const w = q.sub(p);
+        const c = r.cross(s);
+       
+        const t = (w.cross(s)) / c;
+        const u = (w.cross(r)) / c;
+
+        if ((Math.abs(c) > 0.001) && (t >= 0 && t < 1) && (u >= 0 && u < 1)) {
+            return this.a.add(r.mul(t));
+        }
+
+        // TODO: collinear intersection is missing
+
+        return Vector2.NaN;
+    }
 
     equals(o: Line) {
         return (this.a.equals(o.a) && this.b.equals(o.b)) || (this.a.equals(o.b) && this.b.equals(o.a));
