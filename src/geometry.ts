@@ -10,7 +10,7 @@ export class Room {
     isCollided: boolean = false;
     isMainRoom: boolean = false;
     isIntermediate: boolean = false;
-
+    isHallway: boolean = false;
 
     constructor(position: Vector2, width: number, height: number) {
         this.position = position;
@@ -22,7 +22,10 @@ export class Room {
 
     draw() {
         this.graphics.clear();
-        this.graphics.lineStyle(1, this.isCollided ? 0xff0000 : 0xffffff);
+        if (!this.isHallway) {
+            this.graphics.lineStyle(1, this.isCollided ? 0xff0000 : 0xffffff);
+        }
+
         this.graphics.beginFill(this.isMainRoom ? 0x006400 : this.isIntermediate ? 0x000064 : 0x0f0f0f, 0.8);
         this.graphics.drawRect(this.position.x, this.position.y, this.width, this.height);
         this.graphics.endFill();
@@ -39,10 +42,10 @@ export class Room {
         const ry: number = this.position.y - this.height / 2;
         const rw: number = this.width;
         const rh: number = this.height;
-        const l: Vector2 = o.intersectsWith(new Line(new Vector2(rx,ry), new Vector2(rx, ry+rh)));
-        const r: Vector2 = o.intersectsWith(new Line(new Vector2(rx+rw,ry), new Vector2(rx+rw,ry+rh)));
-        const t: Vector2 = o.intersectsWith(new Line(new Vector2(rx,ry), new Vector2(rx+rw,ry)));
-        const b: Vector2 = o.intersectsWith(new Line(new Vector2(rx,ry+rh), new Vector2(rx+rw,ry+rh)));
+        const l: Vector2 = o.intersectsWith(new Line(new Vector2(rx, ry), new Vector2(rx, ry + rh)));
+        const r: Vector2 = o.intersectsWith(new Line(new Vector2(rx + rw, ry), new Vector2(rx + rw, ry + rh)));
+        const t: Vector2 = o.intersectsWith(new Line(new Vector2(rx, ry), new Vector2(rx + rw, ry)));
+        const b: Vector2 = o.intersectsWith(new Line(new Vector2(rx, ry + rh), new Vector2(rx + rw, ry + rh)));
 
         const intersections: Array<Vector2> = [];
 
@@ -86,7 +89,7 @@ export class Vector2 {
         return this.x == o.x && this.y == o.y;
     }
 
-    isNaN() : boolean {
+    isNaN(): boolean {
         return Number.isNaN(this.x) && Number.isNaN(this.y);
     }
 
@@ -144,10 +147,17 @@ export class Vector2 {
         return Math.pow(this.x, 2) + Math.pow(this.y, 2);
     }
 
+    // https://stackoverflow.com/a/722087
     dirTo(o: Vector2) {
-        return o.sub(this).normalized();
+        const v = o.sub(this);
+        
+        if (v.equals(Vector2.ZERO)) {
+            return Vector2.ZERO;
+        }
+
+        return v.normalized();
     }
-    
+
     cross(o: Vector2) {
         return this.x * o.y - this.y * o.x;
     }
@@ -197,7 +207,7 @@ export class Line {
         const s = o.b.sub(o.a);
         const w = q.sub(p);
         const c = r.cross(s);
-       
+
         const t = (w.cross(s)) / c;
         const u = (w.cross(r)) / c;
 
@@ -208,6 +218,10 @@ export class Line {
         // TODO: collinear intersection is missing
 
         return Vector2.NaN;
+    }
+
+    length(): number {
+        return this.a.distTo(this.b);
     }
 
     equals(o: Line) {
@@ -269,7 +283,7 @@ export class Triangle {
     }
 
     hasPoint(p: Vector2): boolean {
-        return this.a == p || this.b == p || this.c == p;
+        return this.a == p || this.b == p || this.c == p;
     }
 
     draw(): void {

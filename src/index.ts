@@ -6,15 +6,15 @@ import { prim } from "./mst";
 const app: PIXI.Application = new PIXI.Application({ width: 960, height: 540, antialias: true, backgroundColor: 0xb0b0b0 });
 document.body.appendChild(app.view);
 
-const TILE_SIZE: number = 0.2;
+const TILE_SIZE: number = 2;
 const ROOM_MIN_DIM: number = 8;
 const ROOM_MAX_DIM: number = 48;
 const ROOM_SPAWN_RADIUS: number = 48;
 const ROOM_COUNT: number = 128;
 const MAIN_ROOM_COUNT: number = 12;
 const MAIN_ROOM_DIST: number = 64;
-const STAGE_PAUSE: number = 500;
-const STAGE_STEP_PAUSE: number = 20;
+const STAGE_PAUSE: number = 1000;
+const STAGE_STEP_PAUSE: number = 100;
 const READD_EDGE_COUNT: number = 2;
 
 enum State {
@@ -90,7 +90,7 @@ function roomGeneration(_delta: number): void {
             elapsedTime = 0.0;
         }
     } else {
-        if (elapsedTime >= STAGE_STEP_PAUSE) {
+        if (elapsedTime >= STAGE_STEP_PAUSE / 10) {
             rooms[tempIndex++].graphics.visible = true;
             elapsedTime = 0.0;
         }
@@ -120,19 +120,21 @@ function roomSeparation(delta: number): void {
                     rooms[i].isCollided = true;
                     const dir = rooms[j].position.dirTo(rooms[i].position);
                     let newPosition = rooms[i].position.add(dir.mul(delta * 2));
-                    newPosition = newPosition.add(new Vector2(Math.random() - 0.5, Math.random() - 0.5).mul(1.5));
+                    newPosition = newPosition.add(new Vector2(Math.random() - 0.5, Math.random() - 0.5).mul(2.5));
                     rooms[i].position = newPosition;
-                    rooms[i].position.x = roundm(rooms[i].position.x, TILE_SIZE);
-                    rooms[i].position.y = roundm(rooms[i].position.y, TILE_SIZE);
-                }
+                    rooms[i].position.x = roundm(newPosition.x, TILE_SIZE);
+                    rooms[i].position.y = roundm(newPosition.y, TILE_SIZE);
+                } 
             }
         }
+        tempIndex++;
 
         if (rooms.every(r => !r.isCollided)) {
             generationState = State.MainRoomPicking;
             stateChanged = true;
             elapsedTime = 0.0;
             tempIndex = 0;
+            console.log(rooms);
         }
     }
 }
@@ -225,6 +227,7 @@ function spanningTree(_delta: number): void {
     } else {
         if (elapsedTime >= STAGE_STEP_PAUSE) {
             app.stage.removeChild(removeEdges[tempIndex++].graphics);
+            elapsedTime = 0.0;
         }
 
         if (tempIndex == removeEdges.length) {
@@ -240,24 +243,50 @@ function hallwayRouting(_delta: number): void {
     if (stateChanged) {
         if (elapsedTime >= STAGE_PAUSE) {
             stateChanged = false;
+            const center = new Vector2(app.view.width / 2, app.view.height / 2);
             for (const e of edges) {
                 // choose route depending on the route
-                const l1 = new Line(e.a, new Vector2(e.b.x, e.a.y));
+                let a: Vector2 = e.a;
+                let b: Vector2 = e.b;
+
+                if (a.distSq(center) < b.distSq(center)) {
+                    const temp: Vector2 = a;
+                    a = b;
+                    b = temp;
+                }
+
+                const l1 = new Line(a, new Vector2(a.x, b.y));
+                const l2 = new Line(new Vector2(a.x, b.y), b);
                 l1.color = 0xff0000;
-                const l2 = new Line(new Vector2(e.b.x, e.a.y), e.b);
                 l2.color = 0xff0000;
+
+                if (Math.abs(a.x - center.x) > Math.abs(a.y - center.y)) {
+                    l1.b = new Vector2(b.x, a.y);
+                    l2.a = new Vector2(b.x, a.y);
+                }
+
                 connections.push(l1);
                 connections.push(l2);
-
             }
             tempIndex = 0;
             elapsedTime = 0.0;
         }
     } else {
-        if (elapsedTime >= STAGE_STEP_PAUSE) {
+        if (tempIndex == connections.length) {
+            if (elapsedTime >= STAGE_PAUSE) {
+                generationState = State.HallwayGeneration;
+                elapsedTime = 0.0;
+                tempIndex = 0;
+                stateChanged = true;
+
+                let unusedRooms = rooms.filter(r => !r.isMainRoom && !r.isIntermediate);
+                unusedRooms.forEach(r => app.stage.removeChild(r.graphics));
+                rooms = rooms.filter(r => !unusedRooms.includes(r));
+            }
+        }
+        else if (elapsedTime >= STAGE_STEP_PAUSE) {
             const l = connections[tempIndex];
             app.stage.addChild(l.graphics);
-            l.draw();
 
             for (const r of rooms.filter(r => !r.isMainRoom)) {
                 const intersects = r.intersectWithLine(l);
@@ -269,17 +298,10 @@ function hallwayRouting(_delta: number): void {
 
             if (tempIndex < edges.length) {
                 const e = edges[tempIndex];
-                e.clear();
                 app.stage.removeChild(e.graphics);
             }
             tempIndex++;
-        }
-
-
-        if (tempIndex == connections.length) {
-            generationState = State.HallwayGeneration;
             elapsedTime = 0.0;
-            tempIndex = 0;
         }
     }
 }
@@ -292,15 +314,32 @@ function hallwayGeneration(_delta: number): void {
             elapsedTime = 0.0;
         }
     } else {
-        if (elapsedTime >= STAGE_STEP_PAUSE) {
+        if (tempIndex == connections.length) {
+            if (elapsedTime >= STAGE_PAUSE) {
+                connections.forEach(c => app.stage.removeChild(c.graphics));
+                generationState = State.HallwayGeneration;
+                elapsedTime = 0.0;
+                tempIndex = 0;
+            }
+        }
+        else if (elapsedTime >= STAGE_STEP_PAUSE) {
+            const c = connections[tempIndex];
+            let dir = c.a.dirTo(c.b);
+            let width = dir.x == 0 ? 8 : 2;
+            let height = dir.y == 0 ? 8 : 2;
+
+            for (let i = 1; i < c.length(); i += 2) {
+                let r = new Room(c.a.add(dir.mul(i)), width, height);
+                if (!rooms.some(room => room.checkForCollision(r))) {
+                    app.stage.addChild(r.graphics);
+                    r.isHallway = true;
+                    rooms.push(r);
+                }
+            }
+            tempIndex++;
+            elapsedTime = 0.0;
         }
 
-    }
-
-    if (tempIndex == edges.length) {
-        //generationState = State.IntermediateRooms;
-        elapsedTime = 0.0;
-        tempIndex = 0;
     }
 }
 
@@ -329,8 +368,12 @@ function gameLoop(delta: number): void {
             break;
     }
 
-    for (let i = 0; i < rooms.length; i++) {
-        rooms[i].draw();
+    for (const r of rooms) {
+        r.draw();
+    }
+
+    for (const l of connections) {
+        l.draw();
     }
 
     elapsedTime += app.ticker.elapsedMS;
