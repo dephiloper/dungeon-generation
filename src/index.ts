@@ -77,7 +77,11 @@ function generateRooms(points: Vector2[]): Array<Room> {
     return rooms;
 }
 
-async function setup() {
+function findRoomByPosition(pos: Vector2): Room | undefined {
+    return rooms.find(r => r.position.equals(pos));
+}
+
+function setup() {
     app.ticker.add(delta => gameLoop(delta));
 }
 
@@ -124,7 +128,7 @@ function roomSeparation(delta: number): void {
                     rooms[i].position = newPosition;
                     rooms[i].position.x = roundm(newPosition.x, TILE_SIZE);
                     rooms[i].position.y = roundm(newPosition.y, TILE_SIZE);
-                } 
+                }
             }
         }
         tempIndex++;
@@ -245,7 +249,7 @@ function hallwayRouting(_delta: number): void {
             stateChanged = false;
             const center = new Vector2(app.view.width / 2, app.view.height / 2);
             for (const e of edges) {
-                // choose route depending on the route
+                // choose route depending on the center
                 let a: Vector2 = e.a;
                 let b: Vector2 = e.b;
 
@@ -321,12 +325,13 @@ function hallwayGeneration(_delta: number): void {
                 elapsedTime = 0.0;
                 tempIndex = 0;
             }
-        }
-        else if (elapsedTime >= STAGE_STEP_PAUSE) {
+        } else if (elapsedTime >= STAGE_STEP_PAUSE) {
             const c = connections[tempIndex];
+            const roomA = findRoomByPosition(c.a);
+            const roomB = findRoomByPosition(c.b);
             let dir = c.a.dirTo(c.b);
-            let width = dir.x == 0 ? 8 : 2;
-            let height = dir.y == 0 ? 8 : 2;
+            let width = dir.x == 0 ? 4 : 2;
+            let height = dir.y == 0 ? 4 : 2;
 
             for (let i = 1; i < c.length(); i += 2) {
                 let r = new Room(c.a.add(dir.mul(i)), width, height);
