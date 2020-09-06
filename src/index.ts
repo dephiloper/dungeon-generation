@@ -9,11 +9,11 @@ document.body.appendChild(app.view);
 const TILE_SIZE: number = 2;
 const ROOM_MIN_DIM: number = 8;
 const ROOM_MAX_DIM: number = 48;
-const ROOM_SPAWN_RADIUS: number = 48;
-const ROOM_COUNT: number = 128;
-const MAIN_ROOM_COUNT: number = 12;
+const ROOM_SPAWN_RADIUS: number = 96;
+const ROOM_COUNT: number = 96;
+const MAIN_ROOM_COUNT: number = 8;
 const MAIN_ROOM_DIST: number = 64;
-const STAGE_PAUSE: number = 1000;
+const STAGE_PAUSE: number = 500;
 const STAGE_STEP_PAUSE: number = 100;
 const READD_EDGE_COUNT: number = 2;
 
@@ -94,10 +94,11 @@ function roomGeneration(_delta: number): void {
             elapsedTime = 0.0;
         }
     } else {
-        if (elapsedTime >= STAGE_STEP_PAUSE / 10) {
+        //if (elapsedTime >= STAGE_STEP_PAUSE / 100) {
             rooms[tempIndex++].graphics.visible = true;
+            rooms.forEach(r => r.graphics.visible = true);
             elapsedTime = 0.0;
-        }
+        //}
 
         if (rooms.every(r => r.graphics.visible)) {
             generationState = State.RoomSeparation;
@@ -128,6 +129,7 @@ function roomSeparation(delta: number): void {
                     rooms[i].position = newPosition;
                     rooms[i].position.x = roundm(newPosition.x, TILE_SIZE);
                     rooms[i].position.y = roundm(newPosition.y, TILE_SIZE);
+                    break;
                 }
             }
         }
@@ -327,8 +329,8 @@ function hallwayGeneration(_delta: number): void {
             }
         } else if (elapsedTime >= STAGE_STEP_PAUSE) {
             const c = connections[tempIndex];
-            const roomA = findRoomByPosition(c.a);
-            const roomB = findRoomByPosition(c.b);
+            //const roomA = findRoomByPosition(c.a);
+            //const roomB = findRoomByPosition(c.b);
             let dir = c.a.dirTo(c.b);
             let width = dir.x == 0 ? 4 : 2;
             let height = dir.y == 0 ? 4 : 2;
